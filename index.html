@@ -1,21 +1,119 @@
 <!doctype html>
 <html lang="en">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#101522"><link rel="manifest" href="manifest.json">
-<title>Match Report</title><link rel="stylesheet" href="style.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101522">
+<link rel="manifest" href="manifest.json">
+<title>Match Report</title>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-<header><div class="brand">MR <span>Match Report</span></div><button id="refresh" class="small">↻ Refresh</button></header>
-<main>
-<section class="hero"><p class="eyebrow">POST-MATCH REPORTS · INDIA TIME</p><h1>Results, with the timeline.</h1><p class="sub">Football goals and tennis set scores after matches finish.</p>
-<div class="actions"><button id="enableNotify" class="primary">Enable notifications</button><button id="testTone" class="secondary">Test sound</button></div>
-<p id="notifyStatus" class="hint">Notifications work best when this app is open. Background alerts need a push server.</p></section>
-<nav class="tabs"><button class="tab active" data-sport="football">⚽ Football</button><button class="tab" data-sport="tennis">🎾 Tennis</button></nav>
-<section class="toolbar"><div><label for="limit">Matches shown</label><select id="limit"><option>20</option><option>10</option><option>30</option><option>50</option></select></div><div><label for="poll">Check while open</label><select id="poll"><option value="0">Manual only</option><option value="2" selected>Every 2 min</option><option value="5">Every 5 min</option></select></div></section>
-<div id="status" class="status">Loading matches…</div><section id="matches" class="matches"></section>
-<section class="footnote"><b>Time zone:</b> Asia/Kolkata (IST). Exact event/set completion times appear only if the data source supplies them. <br><a href="https://sportscore.com/" rel="dofollow">Powered by SportScore</a></section>
+<header>
+  <div class="brand">MR <span>Match Report</span></div>
+  <div class="header-actions">
+    <span id="sessionLabel" class="session-label" hidden></span>
+    <button id="refresh" class="small" hidden>↻ Refresh</button>
+    <button id="signOut" class="small" hidden>Sign out</button>
+  </div>
+</header>
+
+<main id="authGate" class="auth-main">
+  <section class="auth-card">
+    <p class="eyebrow">MATCH REPORT · SECURE ACCESS</p>
+    <h1>Welcome back.</h1>
+    <p class="sub">Sign in to view post-match reports. New accounts must verify email and wait for admin approval.</p>
+    <div class="auth-tabs" id="authTabs">
+      <button type="button" class="auth-tab active" data-auth-mode="login">Sign in</button>
+      <button type="button" class="auth-tab" data-auth-mode="signup">Create account</button>
+    </div>
+
+    <form id="loginForm" class="auth-form">
+      <label for="loginEmail">Email address</label>
+      <input id="loginEmail" name="email" type="email" autocomplete="email" required placeholder="you@example.com">
+      <label for="loginPassword">Password</label>
+      <input id="loginPassword" name="password" type="password" autocomplete="current-password" required minlength="8" placeholder="At least 8 characters">
+      <button class="primary full-width" type="submit">Sign in</button>
+    </form>
+
+    <form id="signupForm" class="auth-form" hidden>
+      <label for="signupFullName">Full name</label>
+      <input id="signupFullName" name="full_name" type="text" autocomplete="name" required maxlength="100" placeholder="Your name">
+      <label for="signupEmail">Email address</label>
+      <input id="signupEmail" name="email" type="email" autocomplete="email" required placeholder="you@example.com">
+      <label for="signupPassword">Password</label>
+      <input id="signupPassword" name="password" type="password" autocomplete="new-password" required minlength="8" placeholder="At least 8 characters">
+      <label for="signupPassword2">Confirm password</label>
+      <input id="signupPassword2" name="password_confirm" type="password" autocomplete="new-password" required minlength="8" placeholder="Type it again">
+      <button class="primary full-width" type="submit">Create account & send code</button>
+      <p class="hint">Your account stays locked until the email is verified and the admin approves it.</p>
+    </form>
+
+    <form id="otpForm" class="auth-form" hidden>
+      <div class="otp-intro">
+        <h2>Check your email</h2>
+        <p class="sub">Enter the verification code sent to <strong id="otpEmailLabel"></strong>.</p>
+      </div>
+      <label for="otpToken">Email verification code</label>
+      <input id="otpToken" name="token" type="text" inputmode="numeric" autocomplete="one-time-code" required minlength="6" maxlength="8" pattern="[0-9]{6,8}" placeholder="6-digit code">
+      <button class="primary full-width" type="submit">Verify email</button>
+      <button class="secondary full-width" type="button" id="resendOtp">Resend code</button>
+      <button class="text-button" type="button" id="backToLogin">Back to sign in</button>
+    </form>
+
+    <div id="authMessage" class="notice" role="status" aria-live="polite" hidden></div>
+    <p class="small-print">Access is controlled by your account status on the server. Do not share your password or verification code.</p>
+  </section>
 </main>
+
+<main id="approvalGate" class="auth-main" hidden>
+  <section class="auth-card status-card">
+    <p class="eyebrow">ACCOUNT STATUS</p>
+    <div id="approvalIcon" class="status-icon">◷</div>
+    <h1 id="approvalTitle">Approval pending</h1>
+    <p id="approvalText" class="sub">Your email is verified. An administrator must approve your account before you can view reports.</p>
+    <div class="status-actions">
+      <button id="checkApproval" class="primary" type="button">Check status</button>
+      <button id="signOutPending" class="secondary" type="button">Sign out</button>
+    </div>
+    <div id="approvalMessage" class="notice" role="status" aria-live="polite" hidden></div>
+  </section>
+</main>
+
+<main id="appMain" class="app-main" hidden>
+  <section class="hero">
+    <p class="eyebrow">POST-MATCH REPORTS · INDIA TIME</p>
+    <h1>Results, with the timeline.</h1>
+    <p class="sub">Football goals and tennis set scores after matches finish.</p>
+    <div class="actions"><button id="enableNotify" class="primary">Enable notifications</button><button id="testTone" class="secondary">Test sound</button></div>
+    <p id="notifyStatus" class="hint">Notifications work best when this app is open. Background alerts need a push server.</p>
+  </section>
+
+  <section id="adminPanel" class="admin-panel" hidden>
+    <div class="admin-head">
+      <div><p class="eyebrow">ADMIN CONTROLS</p><h2>User access approvals</h2></div>
+      <button id="refreshUsers" class="secondary" type="button">↻ Refresh users</button>
+    </div>
+    <p class="hint">Only approved administrators can change access. Approval changes are enforced by database policies.</p>
+    <div id="adminMessage" class="notice" role="status" aria-live="polite" hidden></div>
+    <div id="adminUsers" class="admin-users"><div class="empty">Loading users…</div></div>
+  </section>
+
+  <nav class="tabs"><button class="tab active" data-sport="football">⚽ Football</button><button class="tab" data-sport="tennis">🎾 Tennis</button></nav>
+  <section class="toolbar">
+    <div><label for="limit">Matches shown</label><select id="limit"><option>20</option><option>10</option><option>30</option><option>50</option></select></div>
+    <div><label for="poll">Check while open</label><select id="poll"><option value="0">Manual only</option><option value="2" selected>Every 2 min</option><option value="5">Every 5 min</option></select></div>
+    <form id="matchSearchForm" class="match-search"><label for="matchSearch">Find a loaded match</label><div class="search-row"><input id="matchSearch" type="search" placeholder="Paste team/player name"><button class="secondary" type="submit">Find</button></div></form>
+  </section>
+  <div id="status" class="status">Loading matches…</div>
+  <section id="matches" class="matches"></section>
+  <section class="footnote"><b>Time zone:</b> Asia/Kolkata (IST). Exact event/set completion times appear only if the data source supplies them. <br><a href="https://sportscore.com/" rel="dofollow">Powered by SportScore</a></section>
+</main>
+
 <dialog id="detail"><div class="dialog-head"><h2 id="detailTitle">Match report</h2><button id="closeDetail" aria-label="Close">✕</button></div><div id="detailBody"></div></dialog>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
 <script src="app.js"></script>
-</body></html>
+</body>
+</html>
