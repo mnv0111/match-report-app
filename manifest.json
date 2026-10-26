@@ -1,0 +1,9 @@
+{
+  "name": "Match Report",
+  "short_name": "Match Report",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#0d111b",
+  "theme_color": "#101522",
+  "description": "Football and tennis post-match reports in Indian Standard Time."
+}

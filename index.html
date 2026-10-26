@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101522"><link rel="manifest" href="manifest.json">
+<title>Match Report</title><link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header><div class="brand">MR <span>Match Report</span></div><button id="refresh" class="small">↻ Refresh</button></header>
+<main>
+<section class="hero"><p class="eyebrow">POST-MATCH REPORTS · INDIA TIME</p><h1>Results, with the timeline.</h1><p class="sub">Football goals and tennis set scores after matches finish.</p>
+<div class="actions"><button id="enableNotify" class="primary">Enable notifications</button><button id="testTone" class="secondary">Test sound</button></div>
+<p id="notifyStatus" class="hint">Notifications work best when this app is open. Background alerts need a push server.</p></section>
+<nav class="tabs"><button class="tab active" data-sport="football">⚽ Football</button><button class="tab" data-sport="tennis">🎾 Tennis</button></nav>
+<section class="toolbar"><div><label for="limit">Matches shown</label><select id="limit"><option>20</option><option>10</option><option>30</option><option>50</option></select></div><div><label for="poll">Check while open</label><select id="poll"><option value="0">Manual only</option><option value="2" selected>Every 2 min</option><option value="5">Every 5 min</option></select></div></section>
+<div id="status" class="status">Loading matches…</div><section id="matches" class="matches"></section>
+<section class="footnote"><b>Time zone:</b> Asia/Kolkata (IST). Exact event/set completion times appear only if the data source supplies them. <br><a href="https://sportscore.com/" rel="dofollow">Powered by SportScore</a></section>
+</main>
+<dialog id="detail"><div class="dialog-head"><h2 id="detailTitle">Match report</h2><button id="closeDetail" aria-label="Close">✕</button></div><div id="detailBody"></div></dialog>
+<script src="app.js"></script>
+</body></html>
