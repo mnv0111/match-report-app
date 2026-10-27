@@ -30,7 +30,12 @@ function setGate(gate) {
   $("refresh").hidden = gate !== "app";
   $("signOut").hidden = gate === "auth";
   $("sessionLabel").hidden = gate !== "app";
-  if (gate !== "app") stopMatchPolling();
+  // Never leave a report dialog visible after sign-out or when access is pending/blocked.
+  if (gate !== "app") {
+    const reportDialog = $("detail");
+    if (reportDialog?.open) reportDialog.close();
+    stopMatchPolling();
+  }
 }
 function setAuthMode(mode) {
   $("loginForm").hidden = mode !== "login";
@@ -322,13 +327,17 @@ function eventText(e) {
   const minute = pick(e,["minute","matchMinute","timeLabel","extra_minute"],"");
   return `${type}${minute ? ` (${minute}${e.extra_minute ? `+${e.extra_minute}` : ""}′)` : ""}${player ? ` — ${player}` : ""}${text ? `: ${text}` : ""}`;
 }
+let reportRequestVersion = 0;
 async function openReport(match) {
   if (currentGate !== "app") return;
-  const title = $("detailTitle"), body = $("detailBody");
+  const requestVersion = ++reportRequestVersion;
+  const title = $("detailTitle"), body = $("detailBody"), reportDialog = $("detail");
   title.textContent = `${match.home} vs ${match.away}`;
   body.innerHTML = '<div class="empty">Loading detailed match report…</div>';
-  $("detail").showModal();
+  if (!reportDialog.open) reportDialog.showModal();
   const m = await getDetail(match);
+  // An auth/approval change or a newer report request may happen while detail data loads.
+  if (currentGate !== "app" || !reportDialog.open || requestVersion !== reportRequestVersion) return;
   const events = m.events.map(e => `<div class="event"><div class="event-time">${esc(eventTime(e))}</div><div class="event-text">${esc(eventText(e))}</div></div>`).join("");
   const finish = pick(m.raw,["finishTime","finish_time","endTime","end_time","finishedAt","finished_at"],"");
   body.innerHTML = `<div class="report-grid"><div class="report-box"><small>Final score / result</small><strong>${esc(tennisMatchScore(m))}</strong>${sport === "tennis" ? `<div class="report-sets">${tennisSetLine(m)}</div>` : ""}</div><div class="report-box"><small>Status</small><strong>${esc(labelStatus(m))}</strong></div><div class="report-box"><small>Start time</small><strong>${esc(ist(m.start))}</strong></div><div class="report-box"><small>Finish time</small><strong>${esc(finish ? ist(finish) : "Not supplied by source")}</strong></div></div><h3>${sport === "football" ? "Goal / match timeline" : "Set / match timeline"}</h3>${sport === "tennis" && m.setScores?.length ? `<h4>Set scores</h4><div class="set-line">${tennisSetLine(m)}</div>` : ""}${events || '<div class="empty">The detail endpoint did not return a timeline for this match. The final result is shown where available; exact goal or set-completion clock times cannot be inferred safely.</div>'}<p class="hint">Times are displayed in IST only when the provider supplies a timestamp. A match minute (e.g. 67′) is not the same as real-world clock time.</p>`;
@@ -347,7 +356,7 @@ $("matchSearchForm").addEventListener("submit", e => { e.preventDefault(); rende
 $("matchSearch").addEventListener("input", render);
 $("enableNotify").onclick = async () => { if (!("Notification" in window)) { $("notifyStatus").textContent = "This browser does not support notifications."; return; } const p = await Notification.requestPermission(); $("notifyStatus").textContent = p === "granted" ? "Notifications enabled. Keep the app open for finish detection in this version." : "Notifications were not allowed. Enable them in browser/site settings."; };
 $("testTone").onclick = () => { try { const ctx = new (window.AudioContext || window.webkitAudioContext)(); const o = ctx.createOscillator(), g = ctx.createGain(); o.connect(g); g.connect(ctx.destination); o.frequency.value = 880; g.gain.value = .12; o.start(); setTimeout(() => { o.stop(); ctx.close(); }, 220); } catch (_) { alert("Sound not available in this browser."); } };
-$("closeDetail").onclick = () => $("detail").close();
+$("closeDetail").onclick = () => { reportRequestVersion++; $("detail").close(); };
 
 /* ---------------- Admin approval dashboard ---------------- */
 async function loadAdminUsers() {
