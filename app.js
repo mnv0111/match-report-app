@@ -43,10 +43,28 @@ function setAuthMode(mode) {
   $("otpForm").hidden = mode !== "otp";
   $("authTabs").hidden = mode === "otp";
   document.querySelectorAll("[data-auth-mode]").forEach(b => b.classList.toggle("active", b.dataset.authMode === mode));
+
+  // The current Supabase default Confirm signup template sends a LINK, not a numeric OTP.
+  // Render the existing verification panel as link instructions for free/default SMTP testing.
+  const linkMode = mode === "otp";
+  const tokenLabel = document.querySelector('label[for="otpToken"]');
+  const verifyButton = $("otpForm").querySelector('button[type="submit"]');
+  if (tokenLabel) tokenLabel.hidden = linkMode;
+  $("otpToken").hidden = linkMode;
+  $("otpToken").required = !linkMode;
+  if (verifyButton) verifyButton.hidden = linkMode;
+  $("resendOtp").textContent = linkMode ? "Resend confirmation link" : "Resend code";
+  const introTitle = $("otpForm").querySelector(".otp-intro h2");
+  const introText = $("otpForm").querySelector(".otp-intro .sub");
+  if (introTitle) introTitle.textContent = linkMode ? "Check your email" : "Enter verification code";
+  if (introText) introText.innerHTML = linkMode
+    ? 'Open the newest confirmation link sent to <strong id="otpEmailLabel"></strong>. It should return you to Match Report.'
+    : 'Enter the verification code sent to <strong id="otpEmailLabel"></strong>.';
+
   authMessage("");
   if (mode === "login") $("loginEmail").focus();
   if (mode === "signup") $("signupFullName").focus();
-  if (mode === "otp") $("otpToken").focus();
+  if (mode === "otp" && !linkMode) $("otpToken").focus();
 }
 function stopMatchPolling() {
   if (timer) clearInterval(timer);
@@ -172,7 +190,13 @@ $("signupForm").addEventListener("submit", async e => {
   if (password !== confirm) { authMessage("The passwords do not match.", "error"); return; }
   busyForm(form, true);
   try {
-    const { data, error } = await supabaseClient.auth.signUp({ email, password, options: { data: { full_name: fullName } } });
+    // Use the exact GitHub Pages app URL for confirmation; do not rely on an old localhost redirect.
+    const emailRedirectTo = window.location.origin + window.location.pathname;
+    const { data, error } = await supabaseClient.auth.signUp({
+      email,
+      password,
+      options: { data: { full_name: fullName }, emailRedirectTo }
+    });
     if (error) { authMessage(error.message, "error"); return; }
     otpEmail = email;
     $("otpEmailLabel").textContent = email;
@@ -182,7 +206,8 @@ $("signupForm").addEventListener("submit", async e => {
       await routeSignedIn(data.session.user);
     } else {
       setAuthMode("otp");
-      authMessage("Verification email requested. Enter the code from your email. If the email contains a link instead of a code, the Supabase Confirm signup email template must be switched to {{ .Token }}.", "warning");
+      $("otpEmailLabel").textContent = email;
+      authMessage("Confirmation email requested. This Supabase email template sends a link, not a code. Open the newest email and click its confirmation link. Older links may use an outdated redirect or have expired.", "success");
     }
   } catch (err) { authMessage(err.message || "Could not create the account.", "error"); }
   finally { busyForm(form, false); }
@@ -211,11 +236,46 @@ $("resendOtp").addEventListener("click", async () => {
   if (!email) { authMessage("Enter the email used to sign up first.", "error"); return; }
   const b = $("resendOtp"); b.disabled = true; b.textContent = "Sending…";
   try {
-    const { error } = await supabaseClient.auth.resend({ type: "signup", email });
+    const emailRedirectTo = window.location.origin + window.location.pathname;
+    const { error } = await supabaseClient.auth.resend({
+      type: "signup",
+      email,
+      options: { emailRedirectTo }
+    });
     if (error) authMessage(error.message, "error");
-    else authMessage("A new signup verification email was requested. Check the Confirm signup email template if it contains a link rather than a code.", "success");
-  } catch (err) { authMessage(err.message || "Could not resend the code.", "error"); }
-  finally { b.disabled = false; b.textContent = "Resend code"; }
+    else authMessage("A fresh confirmation link was requested. Use the newest email only; do not reuse an older link.", "success");
+  } catch (err) { authMessage(err.message || "Could not resend confirmation email.", "error"); }
+  finally { b.disabled = false; b.textContent = "Resend confirmation link"; }
+});
+
+// Also allow a user with an existing unconfirmed account to request a fresh link from Sign in.
+const resendFromLogin = document.createElement("button");
+resendFromLogin.type = "button";
+resendFromLogin.className = "secondary full-width";
+resendFromLogin.textContent = "Resend confirmation email";
+resendFromLogin.style.marginTop = "10px";
+$("loginForm").appendChild(resendFromLogin);
+resendFromLogin.addEventListener("click", async () => {
+  if (!supabaseClient) { authMessage("Supabase is not configured yet.", "error"); return; }
+  const email = $("loginEmail").value.trim().toLowerCase();
+  if (!email) { authMessage("Enter your email address above first.", "warning"); $("loginEmail").focus(); return; }
+  resendFromLogin.disabled = true;
+  resendFromLogin.textContent = "Sending…";
+  try {
+    const emailRedirectTo = window.location.origin + window.location.pathname;
+    const { error } = await supabaseClient.auth.resend({
+      type: "signup",
+      email,
+      options: { emailRedirectTo }
+    });
+    if (error) authMessage(error.message, "error");
+    else authMessage("A fresh signup confirmation link was requested. Check your inbox and use only the newest email.", "success");
+  } catch (err) {
+    authMessage(err.message || "Could not resend confirmation email.", "error");
+  } finally {
+    resendFromLogin.disabled = false;
+    resendFromLogin.textContent = "Resend confirmation email";
+  }
 });
 
 /* ---------------- Existing sports reporting UI ---------------- */
@@ -414,10 +474,27 @@ async function boot() {
   try { supabaseClient = window.supabase.createClient(cfg.SUPABASE_URL, cfg.SUPABASE_PUBLISHABLE_KEY); }
   catch (err) { authMessage("Supabase configuration error: " + (err.message || "check config.js"), "error"); return; }
   setGate("auth");
+  const currentUrl = new URL(window.location.href);
+  const hashParams = new URLSearchParams(currentUrl.hash.replace(/^#/, ""));
+  const callbackError = currentUrl.searchParams.get("error_description") || hashParams.get("error_description");
+  const callbackErrorCode = currentUrl.searchParams.get("error_code") || hashParams.get("error_code");
+  const hasAuthCallback = currentUrl.searchParams.has("code") || hashParams.has("access_token") || hashParams.has("error_description");
   const { data, error } = await supabaseClient.auth.getSession();
   if (error) { authMessage(error.message, "error"); return; }
+  if (hasAuthCallback) {
+    // Supabase JS processes the confirmation callback on client initialization. Remove tokens/errors from the URL.
+    window.history.replaceState({}, document.title, currentUrl.pathname);
+  }
   if (data?.session?.user) await routeSignedIn(data.session.user);
-  else { setAuthMode("login"); authMessage("Sign in to continue, or create an account and verify your email."); }
+  else {
+    setAuthMode("login");
+    if (callbackError) {
+      const detail = callbackErrorCode ? ` (${callbackErrorCode})` : "";
+      authMessage(`Email confirmation did not finish${detail}: ${callbackError}. Request a fresh confirmation email and use the newest link.`, "error");
+    } else {
+      authMessage("Sign in to continue. New accounts must click the confirmation email link and then wait for admin approval.");
+    }
+  }
 }
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("./service-worker.js").catch(() => {});
 boot();
